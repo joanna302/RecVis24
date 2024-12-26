@@ -1,3 +1,4 @@
+This project, carried out as part of the Recvis course in the MVA master, aims to reproduce and extend results provided by the article "TokenCompose:Text-to-Image Diffusion with Token-level Supervision". We re-use the existing code and added our own implementations. 
 <p align="center">
 
   <h1 align="center"><a href="https://mlpc-ucsd.github.io/TokenCompose/">🧩 TokenCompose</a>: Text-to-Image Diffusion with Token-level Supervision</h1>
