@@ -63,13 +63,13 @@ if __name__ == "__main__":
     parser.add_argument("--output_json_path", type=str, required=True)
     parser.add_argument("--text_file_path", type=str, required=True)
     parser.add_argument("--num_ins", type=int, default=5)
-    parser.add_argument("--img_per_prompt", type=int, default=10)
+    parser.add_argument("--img_per_prompt", type=int, default=5)
     parser.add_argument("--threshold", type=float, default=0.01)
     parser.add_argument("--detector", type=str, default="google/owlv2-large-patch14-ensemble")
 
     args = parser.parse_args()
 
-    with open(args.text_file_path, 'r') as f:
+    with open(f"{args.image_dir}/{args.text_file_path}", 'r') as f:
         text_data = json.load(f)
 
     processor = Owlv2Processor.from_pretrained(args.detector)
@@ -81,8 +81,9 @@ if __name__ == "__main__":
     model = model.to(device)
     model.eval()
 
-    json_name = f"{os.environ['RANK']}.json"
-    output_json_name = os.path.join(args.output_json_path, json_name)
+    #json_name = f"{os.environ['RANK']}.json"
+    #output_json_name = os.path.join(args.output_json_path, json_name)
+    output_json_name = os.path.join(args.output_json_path)
 
     index_list = list(range(len(text_data)))
     with distributed_state.split_between_processes(index_list) as data:

@@ -50,12 +50,12 @@ if __name__ == "__main__":
 	parser.add_argument("--threshold", type=float, default=0.1)
 	parser.add_argument("--text_file_path", type=str, required=True)
 	parser.add_argument("--num_ins", type=int, default=5)
-	parser.add_argument("--img_per_prompt", type=int, default=10)
+	parser.add_argument("--img_per_prompt", type=int, default=5)
 
 	args = parser.parse_args() 
 
 	print("Reading Data ...")
-	with open(args.text_file_path, 'r') as f:
+	with open(f"{args.image_dir}/{args.text_file_path}", 'r') as f:
 		text_data = json.load(f)
 	print("Processing ...")
 
