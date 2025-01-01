@@ -40,5 +40,6 @@ accelerate launch --num_processes $NUM_GPUS \
 # gen final multigen scores
 python gen_multigen_scores.py \
     --text_file_path $TEXT_RANDOM_FILE_PATH \
+    --image_dir $SAMPLE_IMG_DIR \
     --result_path $SAMPLE_JSON_DIR \
     --name $OUTPUT_DIR_NAME 

@@ -46,6 +46,7 @@ def get_multigen(results, threshold, text_data, num_ins, img_per_prompt):
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser() 
 	parser.add_argument("--result_path", required=True)
+	parser.add_argument("--image_dir", required=True)
 	parser.add_argument("--name", required=True)
 	parser.add_argument("--threshold", type=float, default=0.1)
 	parser.add_argument("--text_file_path", type=str, required=True)
