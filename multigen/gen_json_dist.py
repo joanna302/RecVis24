@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
     #json_name = f"{os.environ['RANK']}.json"
     #output_json_name = os.path.join(args.output_json_path, json_name)
-    output_json_name = os.path.join(args.output_json_path)
+    output_json_name = f"{args.output_json_path}/{args.output_json_path}.json"
 
     index_list = list(range(len(text_data)))
     with distributed_state.split_between_processes(index_list) as data:

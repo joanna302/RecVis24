@@ -69,6 +69,7 @@ if __name__ == "__main__":
 		with open(results_file, "r") as f:
 			temp = json.load(f)
 			results.update(temp)
+	print(results)
 
 	mg_n, mg_std = get_multigen(
 		results=results,
