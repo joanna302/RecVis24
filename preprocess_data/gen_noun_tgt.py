@@ -40,17 +40,53 @@ def get_nouns(tag_l):
                     n_phrases.append(tag_l[i]['word'])
     return n_phrases
 
-def preprocess_img_captions(img_path, caption):
-    image = preprocess(Image.open(img_path)).unsqueeze(0).to(device)
 
-    if isinstance(caption, list):
+def get_nouns_adjs_vbs(tag_l):
+    n_phrases = []
+    for i in range(len(tag_l)):
+        if i == 0 and ('NN' in tag_l[i]['entity'] or 'VB' in tag_l[i]['entity'] or 'JJ' in tag_l[i]['entity']):
+            n_phrases.append(tag_l[i]['word'])
+        elif i > 0 and ('NN' in tag_l[i]['entity'] or 'VB' in tag_l[i]['entity'] or 'JJ' in tag_l[i]['entity']):
+            if len(n_phrases) == 0:
+                n_phrases.append(tag_l[i]['word'])
+            else:
+                if ('NN' in tag_l[i - 1]['entity'] and 'NN' in tag_l[i]['entity']):
+                    if tag_l[i]['word'].startswith('##'):
+                        n_phrases[-1] = n_phrases[-1] + tag_l[i]['word'].replace('##', '')
+                    elif tag_l[i - 1]['word'].endswith('@@'):
+                        n_phrases[-1] = n_phrases[-1].replace('@@', '') + tag_l[i]['word']
+                    else:
+                        n_phrases[-1] = n_phrases[-1] + ' ' + tag_l[i]['word']
+                elif 'VB' in tag_l[i - 1]['entity'] and 'VB' in tag_l[i]['entity']:
+                    if tag_l[i]['word'].startswith('##'):
+                        n_phrases[-1] = n_phrases[-1] + tag_l[i]['word'].replace('##', '')
+                    elif tag_l[i - 1]['word'].endswith('@@'):
+                        n_phrases[-1] = n_phrases[-1].replace('@@', '') + tag_l[i]['word']
+                    else:
+                        n_phrases[-1] = n_phrases[-1] + ' ' + tag_l[i]['word']
+                elif 'JJ' in tag_l[i - 1]['entity'] and 'JJ' in tag_l[i]['entity']:
+                    if tag_l[i]['word'].startswith('##'):
+                        n_phrases[-1] = n_phrases[-1] + tag_l[i]['word'].replace('##', '')
+                    elif tag_l[i - 1]['word'].endswith('@@'):
+                        n_phrases[-1] = n_phrases[-1].replace('@@', '') + tag_l[i]['word']
+                    else:
+                        n_phrases[-1] = n_phrases[-1] + ' ' + tag_l[i]['word']
+                else:
+                    n_phrases.append(tag_l[i]['word'])
+    return n_phrases
+
+
+def preprocess_img_captions(img_path, caption):
+    #image = preprocess(Image.open(img_path)).unsqueeze(0).to(device)
+
+    #if isinstance(caption, list):
         # use clip to find the best caption
-        text = clip.tokenize(caption).to(device)
-        with torch.no_grad():
-            logits_per_image, logits_per_text = model(image, text)
-            probs = logits_per_image.softmax(dim=-1).cpu().numpy()[0]
-        best_caption_idx = probs.argmax()
-        caption = caption[best_caption_idx]
+        #text = clip.tokenize(caption).to(device)
+        #with torch.no_grad():
+        #    logits_per_image, logits_per_text = model(image, text)
+        #    probs = logits_per_image.softmax(dim=-1).cpu().numpy()[0]
+        #best_caption_idx = probs.argmax()
+        #caption = caption[best_caption_idx]
 
     sentence = Sentence(caption)
     tagger.predict(sentence)
@@ -62,7 +98,7 @@ def preprocess_img_captions(img_path, caption):
             'entity': sentence.tokens[i].tag
         }
         l.append(d_t)
-    attn_list_nouns = list(set(get_nouns(l)))
+    attn_list_nouns = list(set(get_nouns_adjs_vbs(l)))
     attn_list = [[chunk, None] for chunk in attn_list_nouns]
     d = {
         "file_name": img_path,
@@ -83,7 +119,12 @@ if __name__ == "__main__":
     input_json_data = []
     with open(input_json_path, 'r') as f:
         for line in f:
-            input_json_data.append(json.loads(line.strip()))
+            line = line.strip()
+            #if line in ['[', ']']:  # Skip the opening and closing brackets
+            #    continue
+            #if line.endswith(','):  # Remove trailing commas for valid JSON
+            #    line = line[:-1]
+            input_json_data.append(json.loads(line))
 
     output_json_data = []
 
