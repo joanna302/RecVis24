@@ -12,23 +12,24 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 from copy import deepcopy
 from tqdm import tqdm
+from torchvision.ops import box_convert
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 # Grounding DINO
-import GroundingDINO.groundingdino.datasets.transforms as T
-from GroundingDINO.groundingdino.models import build_model
-from GroundingDINO.groundingdino.util import box_ops
-from GroundingDINO.groundingdino.util.slconfig import SLConfig
-from GroundingDINO.groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
+#import GroundingDINO.groundingdino.datasets.transforms as T
+#from GroundingDINO.groundingdino.models import build_model
+#from GroundingDINO.groundingdino.util import box_ops
+#from GroundingDINO.groundingdino.util.slconfig import SLConfig
+#from GroundingDINO.groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
 
-# segment anything
-from segment_anything import (
-    sam_model_registry,
-    build_sam_hq,
-    SamPredictor
-)
+import groundingdino.datasets.transforms as T
+from groundingdino.models import build_model
+from groundingdino.util import box_ops
+from groundingdino.util.slconfig import SLConfig
+from groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
+
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -175,7 +176,7 @@ if __name__ == "__main__":
         "--sam_hq_checkpoint", type=str, default=None, help="path to sam-hq checkpoint file"
     )
     parser.add_argument(
-        "--use_sam_hq", action="store_true", help="using sam-hq for prediction"
+        "--use_sam_hq", action="store_false", help="using sam-hq for prediction"
     )
     parser.add_argument(
         "--input_metadata", type=str, default=None, help="path to metadata file"
@@ -189,6 +190,10 @@ if __name__ == "__main__":
     parser.add_argument("--text_threshold", type=float, default=0.25, help="text threshold")
 
     parser.add_argument("--device", type=str, default="cpu", help="running on cpu only!, default=False")
+
+    parser.add_argument("--use_sam2", action="store_true", help='using SAM2 or SAM')
+    parser.add_argument("--sam2_configs", type=str , help='SAM 2 configuration')
+
     args = parser.parse_args()
 
     # cfg
@@ -204,18 +209,32 @@ if __name__ == "__main__":
     box_threshold = args.box_threshold
     text_threshold = args.text_threshold
     device = args.device
+    use_sam2 = args.use_sam2
+    sam2_configs = args.sam2_configs
 
     # make dir
     os.makedirs(output_dir, exist_ok=True)
     
     # load groudning model
     model = load_model(config_file, grounded_checkpoint, device=device)
-
     # initialize SAM
-    if use_sam_hq:
-        predictor = SamPredictor(build_sam_hq(checkpoint=sam_hq_checkpoint).to(device))
-    else:
-        predictor = SamPredictor(sam_model_registry[sam_version](checkpoint=sam_checkpoint).to(device))
+    if use_sam2 :
+        from sam2.build_sam import build_sam2
+        from sam2.sam2_image_predictor import SAM2ImagePredictor
+        model_cfg =sam2_configs
+        sam2_model=build_sam2(model_cfg, sam_checkpoint, device=device)
+        predictor = SAM2ImagePredictor(sam2_model)
+    else :
+        # segment anything
+        from segment_anything import (
+            sam_model_registry,
+            build_sam_hq,
+            SamPredictor
+        )
+        if use_sam_hq:
+            predictor = SamPredictor(build_sam_hq(checkpoint=sam_hq_checkpoint).to(device))
+        else:
+            predictor = SamPredictor(sam_model_registry[sam_version](checkpoint=sam_checkpoint).to(device))
 
     output_list = []
 
@@ -253,26 +272,55 @@ if __name__ == "__main__":
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         predictor.set_image(image)
 
-        size = image_pil.size
+        size= image_pil.size
         H, W = size[1], size[0]
-        for i in range(boxes_filt.size(0)):
-            boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
-            boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
-            boxes_filt[i][2:] += boxes_filt[i][:2]
 
-        boxes_filt = boxes_filt.cpu()
-        transformed_boxes = predictor.transform.apply_boxes_torch(boxes_filt, image.shape[:2]).to(device)
-        try:
-            masks, _, _ = predictor.predict_torch(
+        if use_sam2 :
+            try:
+                # process the box prompt for SAM 2
+                if len(pred_phrases)>1: 
+                    for i in range(boxes_filt.size(0)):
+                        boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
+                else: 
+                    boxes_filt = boxes_filt * torch.Tensor([W, H, W, H])
+                input_boxes = box_convert(boxes=boxes_filt, in_fmt="cxcywh", out_fmt="xyxy").numpy()
+		# FIXME: figure how does this influence the G-DINO model
+                torch.autocast(device_type="cuda", dtype=torch.float16).__enter__()
+
+                if torch.cuda.get_device_properties(0).major >= 8:
+                    # turn on tfloat32 for Ampere GPUs (https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices)
+                   torch.backends.cuda.matmul.allow_tf32 = True
+                   torch.backends.cudnn.allow_tf32 = True
+
+
+                #predictor.get_image_embedding()
+                masks, _ , _ = predictor.predict(
                 point_coords = None,
                 point_labels = None,
-                boxes = transformed_boxes.to(device),
-                multimask_output = False,
-            )
-        except:
-            print(f"Cannot predict {d['file_name']}")
-            print(f"pred_phrases: {pred_phrases}")
-            continue
+                box = input_boxes,
+                multimask_output =False,
+                )
+            except:
+                print(f"Cannot predict {d['file_name']}")
+                print(f"pred_phrases: {pred_phrases}")
+                continue
+        else :
+            for i in range(boxes_filt.size(0)):
+                boxes_filt[i] = boxes_filt[i] * torch.Tensor([W, H, W, H])
+                boxes_filt[i][:2] -= boxes_filt[i][2:] / 2
+                boxes_filt[i][2:] += boxes_filt[i][:2]
+            transformed_boxes = predictor.transform.apply_boxes_torch(boxes_filt, image.shape[:2]).to(device)
+            try:
+                masks, _, _ = predictor.predict_torch(
+                  point_coords = None,
+                  point_labels = None,
+                  boxes = transformed_boxes.to(device),
+                  multimask_output = False,
+                )
+            except:
+                print(f"Cannot predict {d['file_name']}")
+                print(f"pred_phrases: {pred_phrases}")
+                continue
 
         phrased_masks = aggregate_masks(masks, pred_phrases)
         for pred_phrase in phrased_masks:
@@ -317,9 +365,12 @@ if __name__ == "__main__":
             if attn_list_phrase is None:
                 print(f"Cannot find {pred_phrase} in {word_list}")
                 continue
-
-            mask = phrased_masks[pred_phrase].squeeze(0).cpu().numpy()
-
+            
+            #mask = phrased_masks[pred_phrase].squeeze(0).cpu().numpy()
+            if len(pred_phrases)>1:
+                mask = phrased_masks[pred_phrase].squeeze(0)
+            else :
+                mask = phrased_masks[pred_phrase]
             mask_name = attn_list_phrase.replace(' ', '_')
             file_comps = [d['file_name'].split('/')[-1].split('.')[0]]
             file_comps.append(mask_name)
@@ -345,4 +396,4 @@ if __name__ == "__main__":
             fw.write(json.dumps(d))
             fw.write("\n")
 
-    
+
