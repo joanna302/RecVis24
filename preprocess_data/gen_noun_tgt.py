@@ -57,6 +57,7 @@ def get_nouns_adjs_vbs(tag_l):
                         n_phrases[-1] = n_phrases[-1].replace('@@', '') + tag_l[i]['word']
                     else:
                         n_phrases[-1] = n_phrases[-1] + ' ' + tag_l[i]['word']
+
                 elif 'VB' in tag_l[i - 1]['entity'] and 'VB' in tag_l[i]['entity']:
                     if tag_l[i]['word'].startswith('##'):
                         n_phrases[-1] = n_phrases[-1] + tag_l[i]['word'].replace('##', '')
@@ -64,6 +65,7 @@ def get_nouns_adjs_vbs(tag_l):
                         n_phrases[-1] = n_phrases[-1].replace('@@', '') + tag_l[i]['word']
                     else:
                         n_phrases[-1] = n_phrases[-1] + ' ' + tag_l[i]['word']
+
                 elif 'JJ' in tag_l[i - 1]['entity'] and 'JJ' in tag_l[i]['entity']:
                     if tag_l[i]['word'].startswith('##'):
                         n_phrases[-1] = n_phrases[-1] + tag_l[i]['word'].replace('##', '')
@@ -71,6 +73,37 @@ def get_nouns_adjs_vbs(tag_l):
                         n_phrases[-1] = n_phrases[-1].replace('@@', '') + tag_l[i]['word']
                     else:
                         n_phrases[-1] = n_phrases[-1] + ' ' + tag_l[i]['word']
+
+                else:
+                    n_phrases.append(tag_l[i]['word'])
+    return n_phrases
+
+
+def get_gp_nouns(tag_l):
+    n_phrases = []
+    for i in range(len(tag_l)):
+        if i == 0 and ('NN' in tag_l[i]['entity'] or 'VB' in tag_l[i]['entity'] or 'JJ' in tag_l[i]['entity']):
+            n_phrases.append(tag_l[i]['word'])
+        elif i > 0 and ('NN' in tag_l[i]['entity'] or 'VB' in tag_l[i]['entity'] or 'JJ' in tag_l[i]['entity']):
+            if len(n_phrases) == 0:
+                n_phrases.append(tag_l[i]['word'])
+            else:
+                if ('NN' in tag_l[i]['entity'] or 'JJ' in tag_l[i]['entity']) and ('NN' in tag_l[i-1]['entity'] or 'JJ' in tag_l[i-1]['entity']):
+                    if tag_l[i]['word'].startswith('##'):
+                        n_phrases[-1] = n_phrases[-1] + tag_l[i]['word'].replace('##', '')
+                    elif tag_l[i - 1]['word'].endswith('@@'):
+                        n_phrases[-1] = n_phrases[-1].replace('@@', '') + tag_l[i]['word']
+                    else:
+                        n_phrases[-1] = n_phrases[-1] + ' ' + tag_l[i]['word']
+
+                elif 'VB' in tag_l[i - 1]['entity'] and 'VB' in tag_l[i]['entity']:
+                    if tag_l[i]['word'].startswith('##'):
+                        n_phrases[-1] = n_phrases[-1] + tag_l[i]['word'].replace('##', '')
+                    elif tag_l[i - 1]['word'].endswith('@@'):
+                        n_phrases[-1] = n_phrases[-1].replace('@@', '') + tag_l[i]['word']
+                    else:
+                        n_phrases[-1] = n_phrases[-1] + ' ' + tag_l[i]['word']
+
                 else:
                     n_phrases.append(tag_l[i]['word'])
     return n_phrases
@@ -98,7 +131,7 @@ def preprocess_img_captions(img_path, caption):
             'entity': sentence.tokens[i].tag
         }
         l.append(d_t)
-    attn_list_nouns = list(set(get_nouns_adjs_vbs(l)))
+    attn_list_nouns = list(set(get_gp_nouns(l)))
     attn_list = [[chunk, None] for chunk in attn_list_nouns]
     d = {
         "file_name": img_path,
